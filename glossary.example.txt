@@ -1,0 +1,9 @@
+# Glossary: one entry per line, lines starting with # are comments.
+# "English = Chinese" pins a translation.
+# A bare English term is kept in English.
+gradient descent = 梯度下降
+backpropagation = 反向传播
+overfitting = 过拟合
+positive psychology = 积极心理学
+PyTorch
+GPU

@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>translate</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --fg: #17181b; --muted: #74757d; --faint: #a7a8af; --line: #e4e2da;
+    --panel: rgb(246 245 241 / 0.86);
+    --accent: #4338ca; --accent-soft: #eceafd; --on-accent: #ffffff;
+    --rev-bg: #fff3cf; --rev-fg: #8a5a00; --rev-line: #f0b429;
+    --ok: #16a34a; --warn: #d97706; --err: #dc2626; --rec: #dc2626;
+    --thumb: rgb(23 24 27 / 0.2); --thumb-hover: rgb(23 24 27 / 0.38);
+    --fs: 34px; --side-w: 380px; --head-h: 54px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1013; --surface: #16181d; --fg: #ececef; --muted: #8b8d96; --faint: #5d5f68; --line: #23252b;
+      --panel: rgb(14 16 19 / 0.86);
+      --accent: #9a9bff; --accent-soft: #1b1c38; --on-accent: #0e1013;
+      --rev-bg: #33270b; --rev-fg: #f5c26b; --rev-line: #d4981c; --rec: #f87171;
+      --thumb: rgb(236 236 239 / 0.2); --thumb-hover: rgb(236 236 239 / 0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1013; --surface: #16181d; --fg: #ececef; --muted: #8b8d96; --faint: #5d5f68; --line: #23252b;
+    --panel: rgb(14 16 19 / 0.86);
+    --accent: #9a9bff; --accent-soft: #1b1c38; --on-accent: #0e1013;
+    --rev-bg: #33270b; --rev-fg: #f5c26b; --rev-line: #d4981c; --rec: #f87171;
+    --thumb: rgb(236 236 239 / 0.2); --thumb-hover: rgb(236 236 239 / 0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; overflow: hidden;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- Scrollbar: thin, rounded, only prominent when needed ---------- */
+  .scroll { scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; scrollbar-gutter: stable; }
+  .scroll::-webkit-scrollbar { width: 14px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .scroll::-webkit-scrollbar-thumb {
+    background: var(--thumb); border-radius: 999px; border: 4px solid transparent; background-clip: content-box;
+  }
+  .scroll::-webkit-scrollbar-thumb:hover { background: var(--thumb-hover); background-clip: content-box; }
+
+  /* ---------- Header ---------- */
+  header {
+    flex: none; height: var(--head-h); display: flex; align-items: center; gap: 14px; padding: 0 18px;
+    background: var(--panel); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); z-index: 5; font-size: 14px;
+  }
+  .brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+  .state { display: flex; align-items: center; gap: 8px; color: var(--muted); min-width: 0; flex: 1; }
+  .state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; color: var(--faint); }
+  .state[data-s="live"] .dot { background: var(--ok); color: var(--ok); animation: pulse 1.6s ease-out infinite; }
+  .state[data-s="ending"] .dot { background: var(--warn); color: var(--warn); }
+  .state[data-s="warn"] .dot { background: var(--err); color: var(--err); }
+  .state[data-s="warn"] #status { color: var(--err); }
+  #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---------- Controls: plain text, no boxes; state is shown with color and underline ---------- */
+  .mic {
+    position: relative; display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 0 6px; border: 0; background: none;
+    color: var(--accent); font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  .mic::after {
+    content: ""; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: currentColor;
+    transform: scaleX(0); transform-origin: left; transition: transform .2s;
+  }
+  .mic:hover:not(:disabled)::after { transform: scaleX(1); }
+  .mic .ic { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; flex: none; }
+  .mic[data-m="on"] { color: var(--rec); }
+  .mic[data-m="on"] .ic { background: var(--rec); animation: rec 1.3s ease-in-out infinite; }
+  .mic[data-m="starting"], .mic[data-m="stopping"] { color: var(--muted); cursor: progress; }
+  .mic[data-m="starting"] .ic, .mic[data-m="stopping"] .ic { border-top-color: transparent; animation: spin .8s linear infinite; }
+
+  .tools { display: flex; align-items: stretch; height: 100%; flex: none; }
+  #sizeTools { display: flex; }
+  .tools button {
+    position: relative; height: 100%; padding: 0 11px; border: 0; background: none; color: var(--muted); font-weight: 600; cursor: pointer;
+  }
+  .tools button:hover { color: var(--fg); }
+  .tools button[aria-pressed="true"] { color: var(--fg); }
+  .tools button[aria-pressed="true"]::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: 0; height: 2px; background: var(--accent); }
+  .tools .sep { width: 1px; align-self: center; height: 16px; background: var(--line); margin: 0 6px; }
+
+  /* ---------- Main: captions + summary ---------- */
+  .layout { flex: 1; display: flex; min-height: 0; position: relative; }
+  #scroll {
+    flex: 1; min-width: 0; overflow-y: auto; scroll-behavior: smooth;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px); mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  }
+  .col { max-width: 940px; margin: 0 auto; padding: 30px 26px 12px; min-height: 100%; }
+
+  .empty { text-align: center; color: var(--muted); padding: 18vh 20px 0; line-height: 1.8; }
+  .empty .big { font-size: 22px; font-weight: 600; color: var(--fg); margin-bottom: 6px; }
+  .empty kbd { font: inherit; font-weight: 700; color: var(--fg); }
+
+  .seg {
+    position: relative; padding: 14px 18px 14px 22px; margin: 0 0 6px; border-radius: 0;
+    opacity: .55; transition: opacity .4s, background .6s; animation: enter .45s ease-out;
+  }
+  .seg.recent, .seg:hover { opacity: 1; }
+  .seg::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; background: transparent; transition: background .4s; }
+  .zh { font-size: var(--fs); line-height: 1.5; font-weight: 520; letter-spacing: .015em; word-break: break-word; }
+  .en { font-size: calc(var(--fs) * .46); line-height: 1.5; color: var(--muted); margin-top: 4px; }
+  body:not(.show-en) .en { display: none; }
+  .seg.pending .zh { color: var(--muted); font-weight: 450; }
+  .seg.fallback .zh { color: var(--muted); font-style: italic; }
+  .seg.polished .zh { animation: settle .7s ease-out; }
+  .old {
+    font-size: calc(var(--fs) * .62); line-height: 1.45; color: var(--muted); text-decoration: line-through; text-decoration-color: var(--rev-line);
+    max-height: 0; opacity: 0; overflow: hidden; transition: max-height .5s, opacity .5s, margin .5s;
+  }
+  .seg.show-old .old { max-height: 8em; opacity: .85; margin-bottom: 6px; }
+  .seg.revised { background: var(--rev-bg); opacity: 1; }
+  .seg.revised::before { background: var(--rev-line); }
+  .seg.flash { animation: flash 2.4s ease-out; }
+  .pill { margin-left: 12px; vertical-align: .3em; font-size: 12px; font-weight: 700; letter-spacing: .06em; font-style: normal; color: var(--rev-fg); }
+  .pill.draft { color: var(--muted); font-weight: 600; }
+
+  .live { margin: 10px 0 0; padding: 16px 20px 16px 22px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+  .live[hidden], .empty[hidden] { display: none; }
+  .live .tag { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; letter-spacing: .08em; color: var(--accent); margin-bottom: 6px; }
+  .live .tag i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); color: var(--accent); animation: pulse 1.4s ease-out infinite; }
+  .live .zh { color: var(--accent); font-weight: 480; min-height: 1.5em; }
+  .live .en { margin-top: 6px; }
+  .spacer { height: 140px; }
+
+  .stage { flex: 1; min-width: 0; position: relative; display: flex; }
+  #latest {
+    position: absolute; left: 0; right: 0; bottom: 0; display: none; z-index: 3; border: 0; padding: 40px 0 14px; cursor: pointer;
+    background: linear-gradient(to top, var(--bg) 45%, transparent); color: var(--accent); font-size: 14px; font-weight: 700; text-align: center;
+  }
+  #latest:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+  /* ---------- Summary sidebar ---------- */
+  #side {
+    width: var(--side-w); flex: none; display: flex; flex-direction: column; min-height: 0;
+    border-left: 1px solid var(--line); background: var(--surface);
+  }
+  body:not(.side-open) #side { display: none; }
+  .side-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 14px 18px 10px; }
+  .side-head h2 { margin: 0; font-size: 15px; font-weight: 700; flex: 1; letter-spacing: .02em; }
+  .side-head button { border: 0; background: none; padding: 4px 0; color: var(--muted); font-size: 13px; cursor: pointer; }
+  .side-head button:hover:not(:disabled) { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+  .side-head button:disabled { opacity: .45; cursor: default; }
+  .meta { flex: none; padding: 0 18px 10px; font-size: 12px; color: var(--muted); min-height: 24px; display: flex; align-items: center; gap: 8px; }
+  .meta.err { color: var(--err); }
+  .meta .spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+  .side-body { flex: 1; overflow-y: auto; padding: 4px 18px 40px; }
+  .side-body section { margin-bottom: 20px; }
+  .side-body h3 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--muted); }
+  .topic { font-size: 18px; font-weight: 700; line-height: 1.45; }
+  .now { padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--accent); font-size: 14px; line-height: 1.55; font-weight: 550; }
+  .points { margin: 0; padding: 0; list-style: none; counter-reset: p; }
+  .points li { counter-increment: p; position: relative; padding: 8px 0 8px 26px; font-size: 14.5px; line-height: 1.6; }
+  .points li::before {
+    content: counter(p) "."; position: absolute; left: 0; top: 8px; color: var(--faint); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .points li.fresh { animation: fresh 3s ease-out; }
+  .term { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 1.5; }
+  .term:last-child { border-bottom: 0; }
+  .term b { font-weight: 650; }
+  .term span { color: var(--muted); text-align: right; }
+  .term.fresh { animation: fresh 3s ease-out; }
+  .side-empty { color: var(--muted); font-size: 14px; line-height: 1.8; padding: 24px 4px; }
+
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 40%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+  @keyframes rec { 50% { opacity: .35; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes settle { from { opacity: .25; } }
+  @keyframes flash { 0%, 25% { box-shadow: 0 0 0 3px var(--rev-line); } 100% { box-shadow: 0 0 0 3px transparent; } }
+  @keyframes fresh { 0%, 30% { background: var(--rev-bg); } 100% { background: transparent; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+  @media (max-width: 980px) {
+    #side { position: absolute; right: 0; top: 0; bottom: 0; width: min(92vw, 400px); z-index: 4; box-shadow: -12px 0 40px rgb(0 0 0 / .18); }
+  }
+  @media (max-width: 640px) {
+    header { gap: 8px; padding: 0 10px; } .brand { display: none; } .col { padding: 18px 10px 8px; }
+    .mic { padding: 0 12px 0 10px; } #sizeTools { display: none; }
+  }
+</style>
+</head>
+<body class="show-en">
+<header>
+  <span class="brand">Live Captions</span>
+  <div class="state" id="state" data-s="connecting"><span class="dot"></span><span id="status">Connecting…</span></div>
+  <button class="mic" id="mic" data-m="off" disabled title="Start / pause listening (Space)"><span class="ic"></span><span id="micLabel">Start listening</span></button>
+  <div class="tools">
+    <span class="sep"></span>
+    <button id="en" aria-pressed="true" title="Show / hide the English text">EN</button>
+    <span id="sizeTools">
+      <button id="smaller" title="Smaller text">A−</button><button id="larger" title="Larger text">A+</button>
+    </span>
+    <button id="theme" title="Switch dark / light">◐</button>
+    <span class="sep"></span>
+    <button id="sideBtn" aria-pressed="true" title="Show / hide the class summary">Summary</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="stage">
+  <main id="scroll" class="scroll">
+    <div class="col">
+      <div class="empty" id="empty">
+        <div class="big" id="emptyBig">Waiting for the teacher…</div>
+        <div id="emptySub"></div>
+      </div>
+      <div id="list"></div>
+      <div class="live" id="live" hidden>
+        <div class="tag"><i></i>SPEAKING NOW</div>
+        <div class="zh" id="liveZh"></div>
+        <div class="en" id="liveEn"></div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+  </main>
+  <button id="latest">↓ Jump to latest</button>
+  </div>
+
+  <aside id="side">
+    <div class="side-head">
+      <h2>Class summary</h2>
+      <button id="sumRefresh" title="Update the summary now">↻ Refresh</button>
+    </div>
+    <div class="meta" id="sumMeta"></div>
+    <div class="side-body scroll" id="sumBody">
+      <div class="side-empty" id="sumEmpty">After a few sentences, the topic, key points and terms of the lesson will show up here and keep updating as the lecture goes on.</div>
+      <section id="sumTopicBox" hidden><h3>TOPIC</h3><div class="topic" id="sumTopic"></div></section>
+      <section id="sumNowBox" hidden><h3>NOW COVERING</h3><div class="now" id="sumNow"></div></section>
+      <section id="sumPointsBox" hidden><h3>KEY POINTS</h3><ol class="points" id="sumPoints"></ol></section>
+      <section id="sumTermsBox" hidden><h3>TERMS</h3><div class="terms" id="sumTerms"></div></section>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var root = document.documentElement;
+  var scroller = $('scroll'), list = $('list'), live = $('live'), latest = $('latest');
+  var rows = {}, maxId = 0, stick = true, segCount = 0;
+  var mic = { state: 'off', source: 'mic' };
+
+  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function save(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* ignore */ } }
+
+  /* ================= Settings: text size / English / theme / sidebar ================= */
+  var size = parseInt(load('fs') || '34', 10) || 34;
+  function applySize() { root.style.setProperty('--fs', size + 'px'); }
+  applySize();
+  $('smaller').onclick = function () { size = Math.max(16, size - 4); save('fs', size); applySize(); };
+  $('larger').onclick = function () { size = Math.min(80, size + 4); save('fs', size); applySize(); };
+
+  var theme = load('theme');
+  if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
+  $('theme').onclick = function () {
+    var cur = root.getAttribute('data-theme');
+    var dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    theme = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    save('theme', theme);
+  };
+
+  var showEn = load('showEn') !== '0';
+  function applyEn() { document.body.classList.toggle('show-en', showEn); $('en').setAttribute('aria-pressed', String(showEn)); }
+  applyEn();
+  $('en').onclick = function () { showEn = !showEn; save('showEn', showEn ? '1' : '0'); applyEn(); };
+
+  var sideSaved = load('side');
+  var sideOpen = sideSaved === null ? window.innerWidth > 980 : sideSaved === '1';
+  function applySide() { document.body.classList.toggle('side-open', sideOpen); $('sideBtn').setAttribute('aria-pressed', String(sideOpen)); }
+  applySide();
+  $('sideBtn').onclick = function () { sideOpen = !sideOpen; save('side', sideOpen ? '1' : '0'); applySide(); };
+
+  /* ================= Scrolling: follow the bottom, but leave you alone when you scroll up ================= */
+  function nearBottom() { return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 200; }
+  scroller.addEventListener('scroll', function () { stick = nearBottom(); latest.style.display = stick ? 'none' : 'block'; });
+  function toBottom() { scroller.scrollTop = scroller.scrollHeight; }
+  latest.onclick = function () { stick = true; latest.style.display = 'none'; toBottom(); };
+
+  /* ================= Listening switch ================= */
+  var micBtn = $('mic');
+  function api(path, body) {
+    return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); });
+  }
+  function renderMic() {
+    var wav = mic.source === 'wav';
+    var labels = {
+      off: wav ? 'Start playing' : 'Start listening', on: wav ? 'Pause playing' : 'Pause listening',
+      starting: 'Connecting…', stopping: 'Wrapping up…'
+    };
+    micBtn.setAttribute('data-m', mic.state);
+    micBtn.disabled = mic.state === 'starting' || mic.state === 'stopping';
+    $('micLabel').textContent = labels[mic.state] || labels.off;
+    updateEmpty();
+  }
+  function toggleMic() {
+    if (micBtn.disabled) return;
+    var want = mic.state !== 'on';
+    micBtn.disabled = true;
+    api('/api/mic', { on: want }).catch(function (e) { setStatus('Failed: ' + e.message); }).then(renderMic);
+  }
+  micBtn.onclick = toggleMic;
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && document.activeElement === document.body) {
+      e.preventDefault();
+      toggleMic();
+    }
+  });
+
+  function updateEmpty() {
+    var show = segCount === 0 && live.hidden;
+    $('empty').hidden = !show;
+    if (!show) return;
+    var off = mic.state === 'off';
+    $('emptyBig').textContent = off ? 'Listening is paused' : 'Waiting for the teacher…';
+    $('emptySub').innerHTML = '';
+    if (off) {
+      $('emptySub').appendChild(document.createTextNode('Click "' + (mic.source === 'wav' ? 'Start playing' : 'Start listening') + '" at the top, or press '));
+      var k = document.createElement('kbd'); k.textContent = 'Space'; $('emptySub').appendChild(k);
+      $('emptySub').appendChild(document.createTextNode(' to start.'));
+    } else {
+      $('emptySub').textContent = 'Once English is recognized, the Chinese captions show up here right away.';
+    }
+  }
+
+  /* ================= Caption lines ================= */
+  function make(seg) {
+    var el = document.createElement('article');
+    el.className = 'seg';
+    var old = document.createElement('div'); old.className = 'old';
+    var zh = document.createElement('div'); zh.className = 'zh';
+    var zhText = document.createElement('span'); zh.appendChild(zhText);
+    var en = document.createElement('div'); en.className = 'en';
+    el.appendChild(old); el.appendChild(zh); el.appendChild(en);
+    list.appendChild(el);
+    segCount++;
+    var row = { el: el, old: old, zh: zh, zhText: zhText, en: en, text: null, timer: 0, pill: null };
+    rows[seg.id] = row;
+    return row;
+  }
+  function setPill(row, label, cls, title) {
+    if (!label) { if (row.pill) { row.pill.remove(); row.pill = null; } return; }
+    if (!row.pill) { row.pill = document.createElement('span'); row.zh.appendChild(row.pill); }
+    row.pill.className = 'pill' + (cls ? ' ' + cls : '');
+    row.pill.textContent = label;
+    row.pill.title = title || '';
+  }
+  function render(seg) {
+    var row = rows[seg.id] || make(seg);
+    maxId = Math.max(maxId, seg.id);
+    row.en.textContent = seg.en;
+    var changed = row.text !== null && row.text !== seg.zh;
+    if (changed && seg.revised) {
+      // Revised: keep the old translation struck through for a while, and highlight the new one
+      row.old.textContent = row.text;
+      row.el.classList.add('show-old');
+      row.el.classList.remove('flash'); void row.el.offsetWidth; row.el.classList.add('flash');
+      clearTimeout(row.timer);
+      row.timer = setTimeout(function () { row.el.classList.remove('show-old'); }, 9000);
+    } else if (changed) {
+      row.el.classList.remove('polished'); void row.el.offsetWidth; row.el.classList.add('polished');
+    }
+    row.text = seg.zh;
+    row.zhText.textContent = seg.zh;
+    row.el.classList.toggle('pending', seg.status === 'pending');
+    row.el.classList.toggle('fallback', seg.status === 'error');
+    row.el.classList.toggle('revised', !!seg.revised);
+    if (seg.revised) setPill(row, '✎ Revised');
+    else if (seg.status === 'error') setPill(row, 'Draft', 'draft', seg.error);
+    else setPill(row, null);
+  }
+  function markRecent() { for (var id in rows) rows[id].el.classList.toggle('recent', maxId - Number(id) < 3); }
+
+  /* ================= Status bar ================= */
+  var stateEl = $('state');
+  function setStatus(text) {
+    $('status').textContent = text;
+    var s = 'connecting';
+    if (/fail|disabled|error|lost|could not|unable/i.test(text)) s = 'warn';
+    else if (/wrapping up/i.test(text)) s = 'ending';
+    else if (/^done|paused/i.test(text)) s = 'done';
+    else if (/listening|playing/i.test(text)) s = 'live';
+    stateEl.setAttribute('data-s', s);
+    if (s === 'done') { live.hidden = true; updateEmpty(); }
+  }
+
+  /* ================= Class summary ================= */
+  var prevPoints = {}, prevTerms = {}, sumData = null, sumView = null;
+  function fillList(container, items, prev, build) {
+    var next = {};
+    container.textContent = '';
+    items.forEach(function (item) {
+      var key = build.key(item);
+      next[key] = true;
+      var el = build.make(item);
+      if (sumData && !prev[key] && Object.keys(prev).length) el.classList.add('fresh');
+      container.appendChild(el);
+    });
+    return next;
+  }
+  function relTime(ms) {
+    var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (s < 10) return 'just now';
+    if (s < 60) return s + ' s ago';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    return Math.round(s / 3600) + ' h ago';
+  }
+  function renderMeta() {
+    var meta = $('sumMeta');
+    meta.className = 'meta';
+    meta.textContent = '';
+    if (!sumView) return;
+    if (!sumView.enabled) { meta.textContent = 'Summary is off (started with --no-summary)'; return; }
+    if (sumView.error) {
+      meta.classList.add('err');
+      meta.textContent = sumView.error;
+    } else if (sumView.busy) {
+      var sp = document.createElement('i'); sp.className = 'spin'; meta.appendChild(sp);
+      meta.appendChild(document.createTextNode('Updating the summary…'));
+    } else if (sumView.data) {
+      meta.textContent = 'Summarized through line ' + sumView.data.upto + ' · updated ' + relTime(sumView.data.updatedAt);
+    }
+  }
+  function renderSummary(view) {
+    sumView = view;
+    var d = view.data;
+    $('sumRefresh').disabled = !view.enabled || view.busy;
+    $('sumRefresh').hidden = !view.enabled;
+    $('sumEmpty').hidden = !!d;
+    if (!view.enabled) $('sumEmpty').textContent = 'The summary is off for this run.';
+    $('sumTopicBox').hidden = !d || !d.topic;
+    $('sumNowBox').hidden = !d || !d.current;
+    $('sumPointsBox').hidden = !d || !d.points.length;
+    $('sumTermsBox').hidden = !d || !d.terms.length;
+    if (d) {
+      $('sumTopic').textContent = d.topic;
+      $('sumNow').textContent = d.current;
+      prevPoints = fillList($('sumPoints'), d.points, prevPoints, {
+        key: function (p) { return p; },
+        make: function (p) { var li = document.createElement('li'); li.textContent = p; return li; }
+      });
+      prevTerms = fillList($('sumTerms'), d.terms, prevTerms, {
+        key: function (t) { return t.en + '=' + t.zh; },
+        make: function (t) {
+          var el = document.createElement('div'); el.className = 'term';
+          var b = document.createElement('b'); b.textContent = t.en;
+          var s = document.createElement('span'); s.textContent = t.zh;
+          el.appendChild(b); el.appendChild(s); return el;
+        }
+      });
+      sumData = d;
+    }
+    renderMeta();
+  }
+  $('sumRefresh').onclick = function () { api('/api/summary/refresh').catch(function () {}); };
+  setInterval(renderMeta, 15000);
+
+  /* ================= SSE ================= */
+  function connect() {
+    var es = new EventSource('/events');
+    es.onmessage = function (ev) {
+      var data = JSON.parse(ev.data);
+      var wasStuck = stick;
+      if (data.segments) { data.segments.forEach(render); markRecent(); }
+      if (data.draft !== undefined || data.draftEn !== undefined) {
+        $('liveZh').textContent = data.draft || '';
+        $('liveEn').textContent = data.draftEn || '';
+        live.hidden = !(data.draft || data.draftEn);
+      }
+      if (data.mic) { mic = data.mic; renderMic(); }
+      if (data.status !== undefined) setStatus(data.status);
+      if (data.summary) renderSummary(data.summary);
+      updateEmpty();
+      if (wasStuck) toBottom();
+    };
+    es.onerror = function () { setStatus('Connection lost, reconnecting… (you can close this page after the session ends)'); micBtn.disabled = true; };
+  }
+  renderMic();
+  connect();
+})();
+</script>
+</body>
+</html>
